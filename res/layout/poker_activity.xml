@@ -1,0 +1,51 @@
+<RelativeLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#7a7a7a">
+
+    <SurfaceView
+        android:layout_width="360dp"
+        android:layout_height="480dp"
+        android:id="@+id/live_view"/>
+
+    <ImageView
+        android:layout_width="360dp"
+        android:layout_height="480dp"
+        android:id="@+id/photo"
+        android:visibility="invisible"/>
+
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="horizontal"
+        android:id="@+id/placeholder"
+        android:layout_below="@+id/live_view"
+        android:layout_alignParentLeft="true"
+        android:layout_marginBottom="45dp">
+
+        <Button
+            android:id="@+id/detect"
+            android:background="@drawable/detect_button"
+            android:layout_height="80dp"
+            android:layout_width="80dp"
+            android:text="Detect"
+            style="@style/button_text"
+            android:textSize="18dp"
+            android:layout_gravity="center"
+            android:layout_centerVertical="true"
+            android:layout_centerHorizontal="true"/>
+
+        <Button
+            android:layout_width="100dp"
+            android:layout_height="60dp"
+            android:text="Operations"
+            android:id="@+id/operation"
+            android:background="@drawable/black_button"
+            style="@style/button_text"
+            android:layout_centerVertical="true"
+            android:layout_alignParentRight="true"
+            android:layout_marginRight="20dp"/>
+
+    </RelativeLayout>
+</RelativeLayout>
