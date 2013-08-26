@@ -23,6 +23,7 @@ import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfPoint;
+import org.opencv.core.Point;
 import org.opencv.core.Size;
 import org.opencv.highgui.Highgui;
 import org.opencv.imgproc.Imgproc;
@@ -86,6 +87,7 @@ public class PokerActivity extends Activity {
             if(view == mDetect) {
                 onDetect();
             } else if (view == mOperation) {
+                log("mOperation clicked");
                 onProcessimage();
             }
         }
@@ -93,6 +95,7 @@ public class PokerActivity extends Activity {
 
     private void onProcessimage() {
         if(mState != State.DISPLAY) {
+            log("Wrong state, returned");
             return;
         }
         image = new Mat();
@@ -105,8 +108,18 @@ public class PokerActivity extends Activity {
                 Imgproc.CHAIN_APPROX_SIMPLE);
         Highgui.imwrite(EDIT_PATH, image);
         displayPhoto(EDIT_PATH);
-        for(MatOfPoint m : contours) {
+        logContours(contours);
+//        for(MatOfPoint m : contours) {
 //            log("MatOfPoint: " + m.)
+//        }
+    }
+
+    private void logContours(ArrayList<MatOfPoint> contours) {
+        for(MatOfPoint m : contours) {
+            log("=== CONTOUR ===");
+            for(Point p : m.toList()) {
+                log("Point: (" + p.x + ", " + p.y + ")");
+            }
         }
     }
 
@@ -114,7 +127,7 @@ public class PokerActivity extends Activity {
         mLiveView.setVisibility(View.INVISIBLE);
         mPhoto.setVisibility(View.VISIBLE);
         displayPhoto(PHOTO_PATH);
-        mState = State.CAPTURE;
+        mState = State.DISPLAY;
     }
 
     private void displayPhoto(String file) {
