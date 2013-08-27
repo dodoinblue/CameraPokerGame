@@ -27,17 +27,23 @@ import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfPoint;
+import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.Point;
+import org.opencv.core.Rect;
+import org.opencv.core.RotatedRect;
 import org.opencv.core.Size;
 import org.opencv.highgui.Highgui;
 import org.opencv.imgproc.Imgproc;
+import org.opencv.utils.Converters;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 public class PokerActivity extends Activity {
 
+    private static final int NUMBER_OF_CARDS = 4;
     private Camera mCamera;
     private SurfaceView mLiveView;
     private SurfaceHolder mLiveViewHolder;
@@ -113,8 +119,47 @@ public class PokerActivity extends Activity {
         Imgproc.findContours(image, contours, new Mat(), Imgproc.RETR_TREE,
                 Imgproc.CHAIN_APPROX_SIMPLE);
         Highgui.imwrite(EDIT_PATH, image);
-//        displayPhoto(EDIT_PATH);
-        drawContours(contours);
+        ArrayList<MatOfPoint> largestContours = findLargestContours(contours);
+        drawContours(largestContours);
+
+        for(MatOfPoint mop: largestContours) {
+            rectifyCard(mop);
+            // TODO: fix this.
+            break;
+        }
+    }
+
+    private void rectifyCard(MatOfPoint card) {
+        MatOfPoint2f card2f = new MatOfPoint2f(card.toArray());
+        double peri = Imgproc.arcLength(card2f, true);
+        MatOfPoint2f approx = new MatOfPoint2f();
+        Imgproc.approxPolyDP(card2f,approx, 0.02*peri, true);
+        // TODO: this is not the same input with example.
+        RotatedRect rect = Imgproc.minAreaRect(card2f);
+
+        Mat h= new Mat(Highgui.imread(PHOTO_PATH), new Rect(0,0,449, 449));
+        Mat transform = Imgproc.getPerspectiveTransform(approx, h);
+        Mat processedImg = new Mat();
+        Imgproc.warpPerspective(Highgui.imread(PHOTO_PATH), processedImg, transform,
+                new Size(450.0, 450.0));
+
+        Highgui.imwrite(EDIT_PATH, processedImg);
+        displayPhoto(EDIT_PATH);
+    }
+
+    private ArrayList<MatOfPoint> findLargestContours(ArrayList<MatOfPoint> contours) {
+        ArrayList<SortableMatOfPoint> sortable = new ArrayList<SortableMatOfPoint>();
+        ArrayList<MatOfPoint> result = new ArrayList<MatOfPoint>();
+        for(MatOfPoint mop : contours) {
+            sortable.add(new SortableMatOfPoint(mop));
+        }
+        Collections.sort(sortable, Collections.reverseOrder());
+        //TODO: use comparator here, instead of a comparable class.
+        for(int i=0; i< NUMBER_OF_CARDS; i++) {
+            result.add(sortable.get(i).getmMOP());
+            log("Area of MatOfPoint " + i + " :" + sortable.get(i).getArea());
+        }
+        return result;
     }
 
     private void drawContours(ArrayList<MatOfPoint> contours) {
@@ -122,10 +167,12 @@ public class PokerActivity extends Activity {
         for(MatOfPoint m : contours) {
             i++;
             log("=== CONTOUR " + i + " ===");
+            log("Area is " + Imgproc.contourArea(m));
             for(Point p : m.toList()) {
-                log("Point: (" + p.x + ", " + p.y + ")");
+//                log("Point: (" + p.x + ", " + p.y + ")");
                 mCanvas.drawPoint((float) p.x, (float) p.y, mPaint);
             }
+//            if (i>10) break;
         }
         mPhoto.setImageDrawable(new BitmapDrawable(getResources(), mBitmap));
     }
