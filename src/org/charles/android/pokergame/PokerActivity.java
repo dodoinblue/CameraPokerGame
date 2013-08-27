@@ -4,6 +4,10 @@ package org.charles.android.pokergame;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.drawable.BitmapDrawable;
 import android.hardware.Camera;
 import android.os.Bundle;
 import android.app.Activity;
@@ -29,6 +33,7 @@ import org.opencv.highgui.Highgui;
 import org.opencv.imgproc.Imgproc;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public class PokerActivity extends Activity {
@@ -49,13 +54,14 @@ public class PokerActivity extends Activity {
     private int mWidth;
     private State mState;
     private Mat image;
-
+    private Canvas mCanvas;
+    private Paint mPaint;
 
     private enum State {
         CAPTURE,
         DISPLAY,
         PROCESSED,
-    };
+    }
 
 
     private SurfaceHolder.Callback mSurfaceHolderCallback = new SurfaceHolder.Callback() {
@@ -107,20 +113,21 @@ public class PokerActivity extends Activity {
         Imgproc.findContours(image, contours, new Mat(), Imgproc.RETR_TREE,
                 Imgproc.CHAIN_APPROX_SIMPLE);
         Highgui.imwrite(EDIT_PATH, image);
-        displayPhoto(EDIT_PATH);
-        logContours(contours);
-//        for(MatOfPoint m : contours) {
-//            log("MatOfPoint: " + m.)
-//        }
+//        displayPhoto(EDIT_PATH);
+        drawContours(contours);
     }
 
-    private void logContours(ArrayList<MatOfPoint> contours) {
+    private void drawContours(ArrayList<MatOfPoint> contours) {
+        int i = 0;
         for(MatOfPoint m : contours) {
-            log("=== CONTOUR ===");
+            i++;
+            log("=== CONTOUR " + i + " ===");
             for(Point p : m.toList()) {
                 log("Point: (" + p.x + ", " + p.y + ")");
+                mCanvas.drawPoint((float) p.x, (float) p.y, mPaint);
             }
         }
+        mPhoto.setImageDrawable(new BitmapDrawable(getResources(), mBitmap));
     }
 
     private void onDetect() {
@@ -128,15 +135,24 @@ public class PokerActivity extends Activity {
         mPhoto.setVisibility(View.VISIBLE);
         displayPhoto(PHOTO_PATH);
         mState = State.DISPLAY;
+
+
+        mBitmap = Bitmap.createBitmap(mPhoto.getWidth(), mPhoto.getHeight(),
+                Bitmap.Config.RGB_565);
+
+        mCanvas = new Canvas(mBitmap);
+        mPaint = new Paint();
+        mPaint.setColor(Color.RED);
     }
 
     private void displayPhoto(String file) {
-        mBitmap = BitmapFactory.decodeFile(file);
-        displayPhoto(mBitmap);
+        Bitmap b = BitmapFactory.decodeFile(file);
+        displayPhoto(b);
     }
 
     private void displayPhoto(Bitmap b) {
         mPhoto.setImageBitmap(b);
+        log("mPhoto size: " + mPhoto.getWidth() + "x" + mPhoto.getHeight());
     }
 
     private void log(String s) {
@@ -196,16 +212,19 @@ public class PokerActivity extends Activity {
 
         mPhoto = (ImageView) findViewById(R.id.photo);
         mPhoto.setOnClickListener(mOnViewClickListener);
-        
+
         mOperation = (Button) findViewById(R.id.operation);
         mOperation.setOnClickListener(mOnViewClickListener);
+
+        getWindow().getDecorView().setSystemUiVisibility(View
+                .SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+
     }
 
     @Override
     protected void onResume() {
         super.onResume();
         log("onResume");
-        mLiveView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
         mLiveViewHolder.addCallback(mSurfaceHolderCallback);
         mCamera = Camera.open();
         mCamera.setDisplayOrientation(90);
