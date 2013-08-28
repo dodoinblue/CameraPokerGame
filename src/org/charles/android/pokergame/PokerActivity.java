@@ -6,7 +6,11 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.ImageFormat;
+import android.graphics.Matrix;
 import android.graphics.Paint;
+import android.graphics.Rect;
+import android.graphics.YuvImage;
 import android.graphics.drawable.BitmapDrawable;
 import android.hardware.Camera;
 import android.os.Bundle;
@@ -25,25 +29,26 @@ import android.widget.Toast;
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
+import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfPoint;
 import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.Point;
-import org.opencv.core.Rect;
-import org.opencv.core.RotatedRect;
 import org.opencv.core.Size;
 import org.opencv.highgui.Highgui;
 import org.opencv.imgproc.Imgproc;
-import org.opencv.utils.Converters;
 
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
 
 public class PokerActivity extends Activity {
 
-    private static final int NUMBER_OF_CARDS = 4;
+    private static final int NUMBER_OF_CARDS = 1;
     private Camera mCamera;
     private SurfaceView mLiveView;
     private SurfaceHolder mLiveViewHolder;
@@ -59,9 +64,50 @@ public class PokerActivity extends Activity {
     private int mHeight;
     private int mWidth;
     private State mState;
-    private Mat image;
+    private Mat mImage;
     private Canvas mCanvas;
     private Paint mPaint;
+
+    private Camera.PreviewCallback mPreviewCallback = new Camera.PreviewCallback() {
+        @Override
+        public void onPreviewFrame(byte[] bytes, Camera camera) {
+            log("onPreviewFrame");
+//            log("saving frame");
+            log("Frame size: WxH" + mWidth + "x" + mHeight);
+
+            try {
+                final YuvImage image = new YuvImage(bytes, ImageFormat.NV21, mWidth, mHeight,
+                        null);
+                File file = new File(PHOTO_PATH);
+                FileOutputStream stream = new FileOutputStream(file);
+                image.compressToJpeg(new Rect(0, 0, mWidth, mHeight), 90, stream);
+                stream.close();
+
+                Bitmap picture = BitmapFactory.decodeFile(PHOTO_PATH);
+                if (picture != null) {
+                    if (picture.getWidth() > picture.getHeight()) {
+                        log("Is landscape image true");
+                        Matrix matrix = new Matrix();
+                        matrix.postRotate(90);
+                        Bitmap rotatedBitmap = Bitmap.createBitmap(picture, 0, 0,
+                                picture.getWidth(), picture.getHeight(), matrix, true);
+                        log("rotatedBitmap size (WxH): " + rotatedBitmap.getWidth() + "x" +
+                                rotatedBitmap.getHeight());
+                        saveBitmap(rotatedBitmap);
+                    }
+                } else {
+                    log("pic is null");
+                }
+
+                mLiveView.setVisibility(View.INVISIBLE);
+                mPhoto.setVisibility(View.VISIBLE);
+                displayPhoto(PHOTO_PATH);
+                mState = State.DISPLAY;
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    };
 
     private enum State {
         CAPTURE,
@@ -84,7 +130,7 @@ public class PokerActivity extends Activity {
             log("surfaceChanged");
             mHeight = mCamera.getParameters().getPreviewSize().height;
             mWidth = mCamera.getParameters().getPreviewSize().width;
-            log("Surface size: " + mWidth + "x" + mHeight);
+//            log("Surface size: " + mWidth + "x" + mHeight);
         }
 
         @Override
@@ -105,23 +151,46 @@ public class PokerActivity extends Activity {
         }
     };
 
+    private void saveBitmap(Bitmap img) {
+        File file = new File(PHOTO_PATH);
+        FileOutputStream fos;
+        try {
+            fos = new FileOutputStream(file);
+            img.compress(Bitmap.CompressFormat.JPEG, 100, fos);
+            fos.close();
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
     private void onProcessimage() {
         if(mState != State.DISPLAY) {
-            log("Wrong state, returned");
+            log("Wrong state, returning");
             return;
         }
-        image = new Mat();
-        image = Highgui.imread(PHOTO_PATH);
-        Imgproc.cvtColor(image, image, Imgproc.COLOR_BGR2GRAY);
-        Imgproc.GaussianBlur(image, image, new Size(1, 1), 1000);
-        Imgproc.threshold(image, image, 120, 255, Imgproc.THRESH_BINARY);
-        ArrayList<MatOfPoint> contours = new ArrayList<MatOfPoint>();
-        Imgproc.findContours(image, contours, new Mat(), Imgproc.RETR_TREE,
-                Imgproc.CHAIN_APPROX_SIMPLE);
-        Highgui.imwrite(EDIT_PATH, image);
-        ArrayList<MatOfPoint> largestContours = findLargestContours(contours);
-        drawContours(largestContours);
 
+        // Read image
+        mImage = new Mat();
+        mImage = Highgui.imread(PHOTO_PATH);
+
+        // Preprocess
+        Mat midProduct = new Mat();
+        Imgproc.cvtColor(mImage, midProduct, Imgproc.COLOR_BGR2GRAY);
+        Imgproc.GaussianBlur(midProduct, midProduct, new Size(1, 1), 1000);
+        Imgproc.threshold(midProduct, midProduct, 120, 255, Imgproc.THRESH_BINARY);
+
+        // Find contours
+        ArrayList<MatOfPoint> contours = new ArrayList<MatOfPoint>();
+        Imgproc.findContours(midProduct, contours, new Mat(), Imgproc.RETR_TREE,
+                Imgproc.CHAIN_APPROX_SIMPLE);
+        Highgui.imwrite(EDIT_PATH, midProduct);
+        ArrayList<MatOfPoint> largestContours = findLargestContours(contours);
+
+//        displayContours(largestContours);
+
+        // Rectify each contour
         for(MatOfPoint mop: largestContours) {
             rectifyCard(mop);
             // TODO: fix this.
@@ -134,17 +203,48 @@ public class PokerActivity extends Activity {
         double peri = Imgproc.arcLength(card2f, true);
         MatOfPoint2f approx = new MatOfPoint2f();
         Imgproc.approxPolyDP(card2f,approx, 0.02*peri, true);
-        // TODO: this is not the same input with example.
-        RotatedRect rect = Imgproc.minAreaRect(card2f);
+        Mat transform = getPerspectiveTransformation(loadPoints(approx.toArray()));
+        Mat result = new Mat(449, 449, CvType.CV_8UC1);
+        Imgproc.warpPerspective(mImage, result, transform, new Size(449, 449));
 
-        Mat h= new Mat(Highgui.imread(PHOTO_PATH), new Rect(0,0,449, 449));
-        Mat transform = Imgproc.getPerspectiveTransform(approx, h);
-        Mat processedImg = new Mat();
-        Imgproc.warpPerspective(Highgui.imread(PHOTO_PATH), processedImg, transform,
-                new Size(450.0, 450.0));
-
-        Highgui.imwrite(EDIT_PATH, processedImg);
+        Highgui.imwrite(EDIT_PATH, result);
         displayPhoto(EDIT_PATH);
+    }
+
+    public ArrayList<Point> loadPoints(Point[] pts){
+        ArrayList<Point> points = new ArrayList<Point>();
+
+        for(int i = 0; i < pts.length; i++){
+            points.add(new Point((float)pts[i].x, (float)pts[i].y));
+        }
+
+        return points;
+    }
+
+//    private Mat warpPerspective(ArrayList<Point> inputPoints) {
+//        Mat transform = getPerspectiveTransformation(inputPoints);
+//        Mat unWarpedMarker = new Mat(449, 449, CvType.CV_8UC1);
+//        Imgproc.warpPerspective(Highgui.imread(PHOTO_PATH), unWarpedMarker, transform,
+//                new Size(449, 449));
+//        return unWarpedMarker;
+//    }
+
+    private Mat getPerspectiveTransformation(ArrayList<Point> inputPoints) {
+        Point[] canonicalPoints = new Point[4];
+        canonicalPoints[0] = new Point(449, 0);
+        canonicalPoints[1] = new Point(0, 0);
+        canonicalPoints[2] = new Point(0, 449);
+        canonicalPoints[3] = new Point(449, 449);
+
+        MatOfPoint2f canonicalMarker = new MatOfPoint2f();
+        canonicalMarker.fromArray(canonicalPoints);
+        Point[] points = new Point[4];
+        for (int i = 0; i < 4; i++) {
+            points[i] = new Point(inputPoints.get(i).x, inputPoints.get(i).y);
+        }
+        MatOfPoint2f marker = new MatOfPoint2f(points);
+
+        return Imgproc.getPerspectiveTransform(marker, canonicalMarker);
     }
 
     private ArrayList<MatOfPoint> findLargestContours(ArrayList<MatOfPoint> contours) {
@@ -154,42 +254,33 @@ public class PokerActivity extends Activity {
             sortable.add(new SortableMatOfPoint(mop));
         }
         Collections.sort(sortable, Collections.reverseOrder());
-        //TODO: use comparator here, instead of a comparable class.
+        //TODO: use a comparator here, instead of a comparable class.
         for(int i=0; i< NUMBER_OF_CARDS; i++) {
             result.add(sortable.get(i).getmMOP());
-            log("Area of MatOfPoint " + i + " :" + sortable.get(i).getArea());
+            log("Area of MatOfPoint " + i + ": " + sortable.get(i).getArea());
         }
         return result;
     }
 
-    private void drawContours(ArrayList<MatOfPoint> contours) {
-        int i = 0;
+    private void displayContours(ArrayList<MatOfPoint> contours) {
         for(MatOfPoint m : contours) {
-            i++;
-            log("=== CONTOUR " + i + " ===");
-            log("Area is " + Imgproc.contourArea(m));
-            for(Point p : m.toList()) {
-//                log("Point: (" + p.x + ", " + p.y + ")");
+            for (Point p : m.toList()) {
                 mCanvas.drawPoint((float) p.x, (float) p.y, mPaint);
             }
-//            if (i>10) break;
+        }
+        mPhoto.setImageDrawable(new BitmapDrawable(getResources(), mBitmap));
+    }
+
+    private void displayPoints(ArrayList<Point> points) {
+        for (Point p : points) {
+            mCanvas.drawPoint((float) p.x, (float) p.y, mPaint);
+            log("Drawing points: " + p.x + ", " + p.y);
         }
         mPhoto.setImageDrawable(new BitmapDrawable(getResources(), mBitmap));
     }
 
     private void onDetect() {
-        mLiveView.setVisibility(View.INVISIBLE);
-        mPhoto.setVisibility(View.VISIBLE);
-        displayPhoto(PHOTO_PATH);
-        mState = State.DISPLAY;
-
-
-        mBitmap = Bitmap.createBitmap(mPhoto.getWidth(), mPhoto.getHeight(),
-                Bitmap.Config.RGB_565);
-
-        mCanvas = new Canvas(mBitmap);
-        mPaint = new Paint();
-        mPaint.setColor(Color.RED);
+        mCamera.setOneShotPreviewCallback(mPreviewCallback);
     }
 
     private void displayPhoto(String file) {
@@ -279,6 +370,7 @@ public class PokerActivity extends Activity {
             log("starting preview");
             initLiveView();
         }
+
     }
 
     @Override
