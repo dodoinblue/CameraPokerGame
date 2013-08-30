@@ -48,7 +48,6 @@ import java.util.List;
 
 public class PokerActivity extends Activity {
 
-    private static final int NUMBER_OF_CARDS = 1;
     private static final int CARD_WIDTH = 449;
     private static final int CARD_HEIGHT = 449;
     private Camera mCamera;
@@ -57,25 +56,27 @@ public class PokerActivity extends Activity {
     private Button mDetect;
     private ImageView mPhoto;
 
-    private String PHOTO_PATH = Environment.getExternalStorageDirectory() + "/poker.png";
-    private String TRAINING_PATH = Environment.getExternalStorageDirectory() + "/10.jpg";
+    private String PHOTO_PATH = Environment.getExternalStorageDirectory() + "/cards.png";
+    private String TRAINING_PATH = Environment.getExternalStorageDirectory() + "/poker_train.jpg";
     private String EDIT_PATH = Environment.getExternalStorageDirectory() + "/poker_edited.png";
     private boolean mLoaded = false;
 
-    private Bitmap mBitmap;
     private Button mOperation;
     private int mHeight;
     private int mWidth;
     private State mState;
-    private Mat mImage;
+
     private Canvas mCanvas;
     private Paint mPaint;
-    Mat mMidProduct;
+    private Bitmap mBitmap;
+
 
     Mat diff_original;
     Mat diff_training;
     Mat diff_result;
     int display_seq = 0;
+
+    ArrayList<Mat> displayResult = new ArrayList<Mat>();
 
     private Camera.PreviewCallback mPreviewCallback = new Camera.PreviewCallback() {
         @Override
@@ -85,38 +86,42 @@ public class PokerActivity extends Activity {
             log("Frame size: WxH" + mWidth + "x" + mHeight);
 
             try {
-                final YuvImage image = new YuvImage(bytes, ImageFormat.NV21, mWidth, mHeight,
-                        null);
-                File file = new File(PHOTO_PATH);
-                FileOutputStream stream = new FileOutputStream(file);
-                image.compressToJpeg(new Rect(0, 0, mWidth, mHeight), 90, stream);
-                stream.close();
-
-                Bitmap picture = BitmapFactory.decodeFile(PHOTO_PATH);
-                if (picture != null) {
-                    if (picture.getWidth() > picture.getHeight()) {
-                        log("Is landscape image true");
-                        Matrix matrix = new Matrix();
-                        matrix.postRotate(90);
-                        Bitmap rotatedBitmap = Bitmap.createBitmap(picture, 0, 0,
-                                picture.getWidth(), picture.getHeight(), matrix, true);
-                        log("rotatedBitmap size (WxH): " + rotatedBitmap.getWidth() + "x" +
-                                rotatedBitmap.getHeight());
-                        saveBitmap(rotatedBitmap);
-                    }
-                } else {
-                    log("pic is null");
-                }
-
-                mLiveView.setVisibility(View.INVISIBLE);
-                mPhoto.setVisibility(View.VISIBLE);
-                displayPhoto(PHOTO_PATH);
-                mState = State.DISPLAY;
+                displayYuv(bytes);
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
     };
+
+    private void displayYuv(byte[] bytes) throws IOException {
+        final YuvImage image = new YuvImage(bytes, ImageFormat.NV21, mWidth, mHeight,
+                null);
+        File file = new File(PHOTO_PATH);
+        FileOutputStream stream = new FileOutputStream(file);
+        image.compressToJpeg(new Rect(0, 0, mWidth, mHeight), 90, stream);
+        stream.close();
+
+        Bitmap picture = BitmapFactory.decodeFile(PHOTO_PATH);
+        if (picture != null) {
+            if (picture.getWidth() > picture.getHeight()) {
+                log("Is landscape image true");
+                Matrix matrix = new Matrix();
+                matrix.postRotate(90);
+                Bitmap rotatedBitmap = Bitmap.createBitmap(picture, 0, 0,
+                        picture.getWidth(), picture.getHeight(), matrix, true);
+                log("rotatedBitmap size (WxH): " + rotatedBitmap.getWidth() + "x" +
+                        rotatedBitmap.getHeight());
+                saveBitmap(rotatedBitmap);
+            }
+        } else {
+            log("pic is null");
+        }
+
+        mLiveView.setVisibility(View.INVISIBLE);
+        mPhoto.setVisibility(View.VISIBLE);
+        displayPhoto(PHOTO_PATH);
+        mState = State.DISPLAY;
+    }
 
     private enum State {
         CAPTURE,
@@ -171,17 +176,24 @@ public class PokerActivity extends Activity {
                 // Display original card, grayed.
                 displayMat(diff_original);
                 display_seq ++;
+                Toast.makeText(this, "grayed original card", Toast.LENGTH_SHORT).show();
                 break;
             case 1:
                 // Display training card, grayed.
                 displayMat(diff_training);
                 display_seq ++;
+                Toast.makeText(this, "grayed training card", Toast.LENGTH_SHORT).show();
                 break;
             case 2:
                 // Display diff result, grayed.
                 displayMat(diff_result);
                 display_seq = 0;
+                Toast.makeText(this, "grayed diff card", Toast.LENGTH_SHORT).show();
                 break;
+//            case 3:
+//                displayPhoto(TRAINING_PATH);
+//                Toast.makeText(this, "original training img", Toast.LENGTH_SHORT).show();
+//                display_seq = 0;
         }
     }
 
@@ -206,70 +218,68 @@ public class PokerActivity extends Activity {
         }
 
         // Read image
-        mImage = Highgui.imread(PHOTO_PATH);
+        Mat image = Highgui.imread(PHOTO_PATH);
 
-        ArrayList<Mat> cards = getGrayedRectifiedCards(mImage, 1);
+        ArrayList<Mat> cards = getGrayedRectifiedCards(image, 4);
 
         // Recognize cards
         Mat train = Highgui.imread(TRAINING_PATH);
-        displayPhoto(TRAINING_PATH);
-        ArrayList<Mat> training_cards = getGrayedRectifiedCards(train, 1);
+//        displayPhoto(TRAINING_PATH);
+        ArrayList<Mat> training_cards = getGrayedRectifiedCards(train, 56);
 //        displayMat(training_cards.get(0));
 
-        Mat diff = imageDiff(cards.get(0), training_cards.get(0));
-//        Highgui.imwrite(EDIT_PATH, diff);
-//        displayPhoto(TRAINING_PATH);
+        diff_original = cards.get(1);
+        diff_training = training_cards.get(0);
+        Mat diff = imageDiff(diff_original, diff_training);
+        diff_result = diff;
+        displayMat(diff_original);
 
         mState = State.PROCESSED;
     }
 
     private Mat imageDiff(Mat img1, Mat img2) {
-        diff_original = new Mat();
-        diff_training = new Mat();
-        diff_result = new Mat();
-        Imgproc.GaussianBlur(img1, diff_original, new Size (5, 5), 5);
-        Imgproc.GaussianBlur(img2, diff_training, new Size (5, 5), 5);
+        Imgproc.GaussianBlur(img1, img1, new Size (5, 5), 5);
+        Imgproc.GaussianBlur(img2, img2, new Size (5, 5), 5);
         Mat diff = new Mat();
-        Core.absdiff(diff_original, diff_training, diff);
-        double threshold = Imgproc.threshold(diff, diff_result, 200, 255, Imgproc.THRESH_BINARY);
-        return diff_result;
+        Core.absdiff(img1, img2, diff);
+        double threshold = Imgproc.threshold(diff, diff, 200, 255, Imgproc.THRESH_BINARY);
+        return diff;
     }
 
 
-    private ArrayList<Mat> getGrayedRectifiedCards(Mat mImage, final int numberOfCards) {
+    private ArrayList<Mat> getGrayedRectifiedCards(Mat image, final int numberOfCards) {
         // Preprocess
-        mMidProduct = new Mat();
-        Imgproc.cvtColor(mImage, mMidProduct, Imgproc.COLOR_BGR2GRAY);
-        Imgproc.GaussianBlur(mMidProduct, mMidProduct, new Size(1, 1), 1000);
-        Imgproc.threshold(mMidProduct, mMidProduct, 120, 255, Imgproc.THRESH_BINARY);
+        Mat midProduct = new Mat();
+        Imgproc.cvtColor(image, midProduct, Imgproc.COLOR_BGR2GRAY);
+        Imgproc.GaussianBlur(midProduct, midProduct, new Size(5, 5), 2);
+        Imgproc.threshold(midProduct, midProduct, 200, 255, Imgproc.THRESH_BINARY);
 
         // Find contours
         ArrayList<MatOfPoint> contours = new ArrayList<MatOfPoint>();
-        Imgproc.findContours(mMidProduct, contours, new Mat(), Imgproc.RETR_TREE,
+        Imgproc.findContours(midProduct, contours, new Mat(), Imgproc.RETR_TREE,
                 Imgproc.CHAIN_APPROX_SIMPLE);
-        Highgui.imwrite(EDIT_PATH, mMidProduct);
+//        Highgui.imwrite(EDIT_PATH, midProduct);
         ArrayList<MatOfPoint> largestContours = findLargestContours(contours, numberOfCards);
-        //        displayContours(largestContours);
 
         ArrayList<Mat> result = new ArrayList<Mat>();
 
         // Rectify each contour
         for(MatOfPoint contour: largestContours) {
-            Mat rectifiedCard = rectifyCard(contour);
+            Mat rectifiedCard = rectifyCard(midProduct, contour);
             result.add(rectifiedCard);
         }
 
         return result;
     }
 
-    private Mat rectifyCard(MatOfPoint card) {
-        MatOfPoint2f card2f = new MatOfPoint2f(card.toArray());
+    private Mat rectifyCard(Mat image, MatOfPoint contour) {
+        MatOfPoint2f card2f = new MatOfPoint2f(contour.toArray());
         double peri = Imgproc.arcLength(card2f, true);
         MatOfPoint2f approx = new MatOfPoint2f();
         Imgproc.approxPolyDP(card2f,approx, 0.02*peri, true);
         Mat transform = getPerspectiveTransformation(loadPoints(approx.toArray()));
         Mat result = new Mat(CARD_WIDTH, CARD_HEIGHT, CvType.CV_8UC1);
-        Imgproc.warpPerspective(mImage, result, transform, new Size(CARD_WIDTH, CARD_HEIGHT));
+        Imgproc.warpPerspective(image, result, transform, new Size(CARD_WIDTH, CARD_HEIGHT));
 
 //        Highgui.imwrite(EDIT_PATH, result);
 //        displayPhoto(EDIT_PATH);
@@ -304,6 +314,17 @@ public class PokerActivity extends Activity {
         return Imgproc.getPerspectiveTransform(marker, canonicalMarker);
     }
 
+    private Mat preprocess(Mat img) {
+        // TODO implement
+        Mat gray = new Mat();
+        Imgproc.cvtColor(img, gray, Imgproc.COLOR_BGR2GRAY);
+        Mat blur = new Mat();
+        Imgproc.GaussianBlur(gray, blur, new Size(5,5), 2);
+        Mat thresh = new Mat();
+        Imgproc.adaptiveThreshold(blur, thresh, 255, 1, 1, 11, 1);
+        return thresh;
+    }
+
     private ArrayList<MatOfPoint> findLargestContours(ArrayList<MatOfPoint> contours,
             int numberOfCards) {
         ArrayList<SortableMatOfPoint> sortable = new ArrayList<SortableMatOfPoint>();
@@ -317,6 +338,7 @@ public class PokerActivity extends Activity {
             result.add(sortable.get(i).getmMOP());
             log("Area of MatOfPoint " + i + ": " + sortable.get(i).getArea());
         }
+
         return result;
     }
 
