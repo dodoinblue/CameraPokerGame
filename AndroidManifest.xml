@@ -29,6 +29,13 @@
 				<category android:name="android.intent.category.LAUNCHER" />
 			</intent-filter>
 		</activity>
+
+        <activity
+                android:name=".CVTesterActivity"
+                android:label="CVTester"
+                android:screenOrientation="portrait"
+                android:configChanges="orientation|keyboardHidden|screenSize">
+        </activity>
 	</application>
 
 </manifest>

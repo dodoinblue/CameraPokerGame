@@ -1,0 +1,40 @@
+<RelativeLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#7a7a7a">
+
+    <org.charles.android.pokergame.Display
+        android:layout_width="360dp"
+        android:layout_height="480dp"
+        android:id="@+id/display"
+        android:visibility="invisible"/>
+
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="horizontal"
+        android:layout_marginTop="4dp"
+        android:layout_below="@+id/display"
+        android:layout_alignParentLeft="true"
+        android:id="@+id/relativeLayout">
+
+        <Spinner
+                android:layout_width="200dp"
+                android:layout_height="wrap_content"
+                android:id="@+id/op_list"
+                android:layout_alignParentBottom="true"
+                android:layout_alignParentTop="true"/>
+
+        <EditText
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:id="@+id/params"
+                android:text="parameters go here"
+                android:layout_toRightOf="@+id/op_list"
+                android:layout_alignTop="@+id/op_list"
+                android:layout_alignBottom="@+id/op_list"/>
+
+    </RelativeLayout>
+
+</RelativeLayout>

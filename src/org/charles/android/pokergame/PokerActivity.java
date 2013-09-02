@@ -2,6 +2,7 @@
 package org.charles.android.pokergame;
 
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
@@ -54,7 +55,7 @@ public class PokerActivity extends Activity {
     private SurfaceView mLiveView;
     private SurfaceHolder mLiveViewHolder;
     private Button mDetect;
-    private ImageView mPhoto;
+    private ImageView mDisplay;
 
     private String PHOTO_PATH = Environment.getExternalStorageDirectory() + "/cards.png";
     private String TRAINING_PATH = Environment.getExternalStorageDirectory() + "/poker_train.jpg";
@@ -118,7 +119,7 @@ public class PokerActivity extends Activity {
         }
 
         mLiveView.setVisibility(View.INVISIBLE);
-        mPhoto.setVisibility(View.VISIBLE);
+        mDisplay.setVisibility(View.VISIBLE);
         displayPhoto(PHOTO_PATH);
         mState = State.DISPLAY;
     }
@@ -161,7 +162,11 @@ public class PokerActivity extends Activity {
             } else if (view == mOperation) {
                 log("mOperation clicked");
                 onIdentifyCards();
-            } else if (view == mPhoto) {
+//                Intent i = new Intent();
+//                i.setClass(PokerActivity.this, CVTesterActivity.class);
+//                startActivity(i);
+
+            } else if (view == mDisplay) {
                 toggleDisplayContent();
             }
         }
@@ -228,8 +233,10 @@ public class PokerActivity extends Activity {
         ArrayList<Mat> training_cards = getGrayedRectifiedCards(train, 56);
 //        displayMat(training_cards.get(0));
 
-        diff_original = cards.get(1);
+        diff_original = cards.get(0);
         diff_training = training_cards.get(0);
+        diff_original = preprocess(diff_original);
+        diff_training = preprocess(diff_training);
         Mat diff = imageDiff(diff_original, diff_training);
         diff_result = diff;
         displayMat(diff_original);
@@ -252,7 +259,7 @@ public class PokerActivity extends Activity {
         Mat midProduct = new Mat();
         Imgproc.cvtColor(image, midProduct, Imgproc.COLOR_BGR2GRAY);
         Imgproc.GaussianBlur(midProduct, midProduct, new Size(5, 5), 2);
-        Imgproc.threshold(midProduct, midProduct, 200, 255, Imgproc.THRESH_BINARY);
+        Imgproc.threshold(midProduct, midProduct, 120, 255, Imgproc.THRESH_BINARY);
 
         // Find contours
         ArrayList<MatOfPoint> contours = new ArrayList<MatOfPoint>();
@@ -265,7 +272,7 @@ public class PokerActivity extends Activity {
 
         // Rectify each contour
         for(MatOfPoint contour: largestContours) {
-            Mat rectifiedCard = rectifyCard(midProduct, contour);
+            Mat rectifiedCard = rectifyCard(image, contour);
             result.add(rectifiedCard);
         }
 
@@ -315,7 +322,6 @@ public class PokerActivity extends Activity {
     }
 
     private Mat preprocess(Mat img) {
-        // TODO implement
         Mat gray = new Mat();
         Imgproc.cvtColor(img, gray, Imgproc.COLOR_BGR2GRAY);
         Mat blur = new Mat();
@@ -348,7 +354,7 @@ public class PokerActivity extends Activity {
                 mCanvas.drawPoint((float) p.x, (float) p.y, mPaint);
             }
         }
-        mPhoto.setImageDrawable(new BitmapDrawable(getResources(), mBitmap));
+        mDisplay.setImageDrawable(new BitmapDrawable(getResources(), mBitmap));
     }
 
     private void displayPoints(ArrayList<Point> points) {
@@ -356,7 +362,7 @@ public class PokerActivity extends Activity {
             mCanvas.drawPoint((float) p.x, (float) p.y, mPaint);
             log("Drawing points: " + p.x + ", " + p.y);
         }
-        mPhoto.setImageDrawable(new BitmapDrawable(getResources(), mBitmap));
+        mDisplay.setImageDrawable(new BitmapDrawable(getResources(), mBitmap));
     }
 
     private void onDetect() {
@@ -369,8 +375,8 @@ public class PokerActivity extends Activity {
     }
 
     private void displayPhoto(Bitmap b) {
-        mPhoto.setImageBitmap(b);
-        log("mPhoto size: " + mPhoto.getWidth() + "x" + mPhoto.getHeight());
+        mDisplay.setImageBitmap(b);
+        log("mDisplay size: " + mDisplay.getWidth() + "x" + mDisplay.getHeight());
     }
 
     private void displayMat(Mat m) {
@@ -433,8 +439,8 @@ public class PokerActivity extends Activity {
         mDetect = (Button) findViewById(R.id.detect);
         mDetect.setOnClickListener(mOnViewClickListener);
 
-        mPhoto = (ImageView) findViewById(R.id.photo);
-        mPhoto.setOnClickListener(mOnViewClickListener);
+        mDisplay = (ImageView) findViewById(R.id.photo);
+        mDisplay.setOnClickListener(mOnViewClickListener);
 
         mOperation = (Button) findViewById(R.id.operation);
         mOperation.setOnClickListener(mOnViewClickListener);
