@@ -45,6 +45,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 public class PokerActivity extends Activity {
@@ -57,9 +58,12 @@ public class PokerActivity extends Activity {
     private Button mDetect;
     private ImageView mDisplay;
 
-    private String PHOTO_PATH = Environment.getExternalStorageDirectory() + "/cards.png";
-    private String TRAINING_PATH = Environment.getExternalStorageDirectory() + "/poker_train.jpg";
-    private String EDIT_PATH = Environment.getExternalStorageDirectory() + "/poker_edited.png";
+    private String PHOTO_PATH = Environment.getExternalStorageDirectory() + "/poker/cards.png";
+    private String TRAINING_PATH = Environment.getExternalStorageDirectory()
+            + "/poker/train.jpg";
+    private String EDIT_PATH = Environment.getExternalStorageDirectory()
+            + "/poker/poker_edited.png";
+    private String BASE_PATH = Environment.getExternalStorageDirectory() + "/poker/";
     private boolean mLoaded = false;
 
     private Button mOperation;
@@ -195,10 +199,6 @@ public class PokerActivity extends Activity {
                 display_seq = 0;
                 Toast.makeText(this, "grayed diff card", Toast.LENGTH_SHORT).show();
                 break;
-//            case 3:
-//                displayPhoto(TRAINING_PATH);
-//                Toast.makeText(this, "original training img", Toast.LENGTH_SHORT).show();
-//                display_seq = 0;
         }
     }
 
@@ -225,21 +225,29 @@ public class PokerActivity extends Activity {
         // Read image
         Mat image = Highgui.imread(PHOTO_PATH);
 
-        ArrayList<Mat> cards = getGrayedRectifiedCards(image, 4);
+        ArrayList<Mat> cards = getGrayedRectifiedCards(image, 1);
 
         // Recognize cards
-        Mat train = Highgui.imread(TRAINING_PATH);
+//        Mat train = Highgui.imread(TRAINING_PATH);
 //        displayPhoto(TRAINING_PATH);
-        ArrayList<Mat> training_cards = getGrayedRectifiedCards(train, 56);
+//        ArrayList<Mat> training_cards = getGrayedRectifiedCards(train, 56);
 //        displayMat(training_cards.get(0));
 
-        diff_original = cards.get(0);
-        diff_training = training_cards.get(0);
-        diff_original = preprocess(diff_original);
-        diff_training = preprocess(diff_training);
-        Mat diff = imageDiff(diff_original, diff_training);
-        diff_result = diff;
-        displayMat(diff_original);
+//        diff_original = cards.get(0);
+//        diff_training = Highgui.imread(BASE_PATH + "card_15.png");
+//        diff_original = preprocess(diff_original);
+//        diff_training = preprocess(diff_training);
+//        Imgproc.cvtColor(diff_training, diff_training, Imgproc.COLOR_BGR2GRAY);
+//        Mat diff = imageDiff(diff_original, diff_training);
+//        diff_result = diff;
+//        displayMat(diff_original);
+
+//        int i = 1;
+//        for (Mat tcard : training_cards) {
+//            Highgui.imwrite(BASE_PATH + "card_" + i + ".png", preprocess(tcard));
+//            i++;
+//        }
+//        Toast.makeText(this, i + " cards written.", Toast.LENGTH_SHORT).show();
 
         mState = State.PROCESSED;
     }
@@ -265,16 +273,17 @@ public class PokerActivity extends Activity {
         ArrayList<MatOfPoint> contours = new ArrayList<MatOfPoint>();
         Imgproc.findContours(midProduct, contours, new Mat(), Imgproc.RETR_TREE,
                 Imgproc.CHAIN_APPROX_SIMPLE);
+        displayContours(contours);
 //        Highgui.imwrite(EDIT_PATH, midProduct);
-        ArrayList<MatOfPoint> largestContours = findLargestContours(contours, numberOfCards);
+//        ArrayList<MatOfPoint> largestContours = findLargestContours(contours, numberOfCards);
 
         ArrayList<Mat> result = new ArrayList<Mat>();
 
         // Rectify each contour
-        for(MatOfPoint contour: largestContours) {
-            Mat rectifiedCard = rectifyCard(image, contour);
-            result.add(rectifiedCard);
-        }
+//        for(MatOfPoint contour: largestContours) {
+//            Mat rectifiedCard = rectifyCard(image, contour);
+//            result.add(rectifiedCard);
+//        }
 
         return result;
     }
@@ -284,6 +293,25 @@ public class PokerActivity extends Activity {
         double peri = Imgproc.arcLength(card2f, true);
         MatOfPoint2f approx = new MatOfPoint2f();
         Imgproc.approxPolyDP(card2f,approx, 0.02*peri, true);
+        log("=========================");
+        Point tmp = approx.toList().get(0);
+        boolean shouldRotate = false;
+        int i = 0;
+        for(Point p : approx.toList()) {
+            if(tmp.x + tmp.y > p.x + p.y) {
+                shouldRotate = true;
+                break;
+            }
+            i ++;
+        }
+        if (shouldRotate) {
+            log("shouldRotate");
+            List<Point> list = approx.toList();
+            Point[] points = {list.get(1), list.get(2), list.get(3), list.get(0)};
+            approx.fromArray(points);
+        }
+
+
         Mat transform = getPerspectiveTransformation(loadPoints(approx.toArray()));
         Mat result = new Mat(CARD_WIDTH, CARD_HEIGHT, CvType.CV_8UC1);
         Imgproc.warpPerspective(image, result, transform, new Size(CARD_WIDTH, CARD_HEIGHT));
@@ -305,10 +333,10 @@ public class PokerActivity extends Activity {
 
     private Mat getPerspectiveTransformation(ArrayList<Point> inputPoints) {
         Point[] canonicalPoints = new Point[4];
-        canonicalPoints[0] = new Point(CARD_WIDTH, 0);
-        canonicalPoints[1] = new Point(0, 0);
-        canonicalPoints[2] = new Point(0, CARD_HEIGHT);
-        canonicalPoints[3] = new Point(CARD_WIDTH, CARD_HEIGHT);
+        canonicalPoints[0] = new Point(0, 0);
+        canonicalPoints[1] = new Point(0, CARD_HEIGHT);
+        canonicalPoints[2] = new Point(CARD_WIDTH, CARD_HEIGHT);
+        canonicalPoints[3] = new Point(CARD_WIDTH, 0);
 
         MatOfPoint2f canonicalMarker = new MatOfPoint2f();
         canonicalMarker.fromArray(canonicalPoints);
@@ -440,7 +468,7 @@ public class PokerActivity extends Activity {
         mDetect.setOnClickListener(mOnViewClickListener);
 
         mDisplay = (ImageView) findViewById(R.id.photo);
-        mDisplay.setOnClickListener(mOnViewClickListener);
+//        mDisplay.setOnClickListener(mOnViewClickListener);
 
         mOperation = (Button) findViewById(R.id.operation);
         mOperation.setOnClickListener(mOnViewClickListener);
